@@ -1,53 +1,82 @@
-from helper import buttonA, neededMove, neededMoveController, moveToChar
-import random
-"""
-keypad layout (k, robot):
-+---+---+---+
-| 7 | 8 | 9 |
-+---+---+---+
-| 4 | 5 | 6 |
-+---+---+---+
-| 1 | 2 | 3 |
-+---+---+---+
-    | 0 | A |
-    +---+---+
+from helper import buttonA, neededMove, neededMoveController
 
-controller layout (c2, robot):
-    +---+---+
-    | ^ | A |
-+---+---+---+
-| < | v | > |
-+---+---+---+
+def solveSteps(movements, controllerCount, doPrint=False):
+    for _ in range(controllerCount):
+        if doPrint:
+            print(movements)
+        newMovements = {}
+        for m,c in movements.items():
+            state = buttonA
+            movement_list = []
+            newElements = {}
+            for k in m:
+                if state == k:
+                    movement_list.append([buttonA])
+                    continue
+                mC = neededMoveController[(state, k)]
+                movement = []
+                if (state == 1j and mC.real == -1) or (state == buttonA and mC.real == -2):
+                    dirs = [int(mC.imag)*(1j), int(mC.real)]
+                elif (state == -1 and mC.imag == 1):
+                    dirs = [int(mC.real), int(mC.imag)*(1j)]
+                else:
+                    dirs = [int(mC.real), int(mC.imag)*(1j)]
+                    if mC.real > 0:
+                        dirs = [int(mC.imag)*(1j), int(mC.real)]
+                for d in dirs:
+                    pos = buttonA if d == buttonA else (1 if d.real > 0 else (-1 if d.real < 0 else (1j if d.imag > 0 else -1j)))
+                    rep = 1 if d == buttonA else int(abs(d))
+                    movement += [pos]*rep
+                movement += [buttonA]
+                movement_list.append(movement)
+                state = k
+            for m in movement_list:
+                if tuple(m) not in newElements:
+                    newElements[tuple(m)] = 1
+                else:
+                    newElements[tuple(m)] += 1
+            for m in movement_list:
+                newElements[tuple(m)] *= c
+            for k,v in newElements.items():
+                if k not in newMovements:
+                    newMovements[k] = v
+                else:
+                    newMovements[k] += v
+        movements = newMovements
 
-controller layout (c1, robot):
-    +---+---+
-    | ^ | A |
-+---+---+---+
-| < | v | > |
-+---+---+---+
+    return sum(len(k)*v for k,v in movements.items())
 
-controller layout (c0, us):
-    +---+---+
-    | ^ | A |
-+---+---+---+
-| < | v | > |
-+---+---+---+
-"""
+def second(btns, controllerCount):
+    minSteps = [None] * len(btns)
+    for _ in range(1):
+        for i, code in enumerate(btns):
+            keyPadState = buttonA
+            movements = {}
+            movement = []
+            for k in code:
+                btn = int(k) if k != 'A' else buttonA
+                mC = neededMove[(keyPadState, btn)]
+                if (keyPadState == 1 and mC.imag == -1) or (keyPadState == 4 and mC.imag == -2) or (keyPadState == 7 and mC.imag == -3):
+                    ms = [mC.real, mC.imag*1j]
+                elif (keyPadState == 0 and mC.real == -1) or (keyPadState == buttonA and mC.real == -2):            
+                    ms = [mC.imag*1j, mC.real]
+                else:
+                    ms = [mC.real, mC.imag*1j]
+                    if mC.real > 0:
+                        ms = [mC.imag*1j, mC.real]
+                for m in ms:
+                    pos = buttonA if m == buttonA else (1 if m.real > 0 else (-1 if m.real < 0 else (1j if m.imag > 0 else -1j)))
+                    rep = 1 if m == buttonA else int(abs(m))
+                    movement += [pos]*rep
+                movement += [buttonA]
+                keyPadState = btn
+            movements[tuple(movement)] = 1
+            v = solveSteps(movements, controllerCount)
+            if minSteps[i] is None:
+                minSteps[i] = v
+            minSteps[i] = min(minSteps[i], v)
 
-
-def valueToStr(v):
-    if v == buttonA:
-        return 'A'
-    s = ""
-    if v.real > 0:
-        s += '>' * int(v.real)
-    elif v.real < 0:
-        s += '<' * abs(int(v.real))
-    if v.imag < 0:
-        s += 'v' * abs(int(v.imag))
-    elif v.imag > 0:
-        s += '^' * int(v.imag)
-    return s
+    print(sum(minSteps[i]*int(code[:-1]) for i, code in enumerate(btns)))
 
 def main(fname):
     with open(fname) as f:
@@ -55,89 +84,10 @@ def main(fname):
 
     btns = [x[:-1] if x[-1] == '\n' else x for x in dat]
     print(btns)
-
-    # initially everything is on button 'A'
-    controllers = 3
-    controllerStates = [buttonA] * (controllers-1)
-    
-    def solveControllers(dirC, level, s):
-        if level == controllers:
-            #print(valueToStr(dir), sep='', end='')
-            for dir in [int(dirC.imag)*1j, int(dirC.real)]:
-                s += valueToStr(dir)
-            return s
-
-        
-        dirs = [int(dirC.real), int(dirC.imag)*(1j)]
-        #print(dirs)
-        if dirC == buttonA:
-            dirs = [buttonA]
-        #"""
-        else:
-            levelState = controllerStates[level-1]
-            if dirs[0] * dirs[1] != 0:
-                poses = [(1 if dirs[0] > 0 else -1), (1j if dirs[1].imag > 0 else -1j)]
-                if levelState != poses[0] and levelState != poses[1]:
-                    ms = [neededMoveController[(levelState, poses[0])], neededMoveController[(levelState, poses[1])]]
-                    if abs(ms[1].real) + abs(ms[1].imag) < abs(ms[0].real) + abs(ms[0].imag):
-                        dirs = [dirs[1], dirs[0]]
-                elif levelState == poses[1]:
-                    dirs = [dirs[1], dirs[0]]
-        #"""
-            if random.random() < 0.5:
-                dirs = [dirs[1], dirs[0]]
-
-        for dir in dirs:
-            if abs(dir) == 0:
-                continue
-            
-            levelState = controllerStates[level-1]
-            pos = buttonA if dir == buttonA else (1 if dir.real > 0 else (-1 if dir.real < 0 else (1j if dir.imag > 0 else -1j)))
-            rep = 1 if dir == buttonA else int(abs(dir))
-            #print(f"level: {level}, levelState: {levelState}, dir: {dir}")
-            if levelState != pos:
-                movement = neededMoveController[(levelState, pos)]
-                #print(levelState, pos, movement)
-                s = solveControllers(movement, level+1, s)
-                """
-                if movement.imag != 0:
-                    s = solveControllers(movement.imag*1j, level+1, s)
-                if movement.real != 0:
-                    s = solveControllers(movement.real, level+1, s)
-                #"""
-            for _ in range(rep):
-                s = solveControllers(buttonA, level+1, s)
-            controllerStates[level-1] = pos
-        return s
-
-    cs = [100000]* len(btns)
-    print(sum(cs))
-    for _ in range(10000):
-        i = 0
-        for code in btns:
-            solution = ""
-            keyPadState = buttonA
-            for k in code:
-                btn = int(k) if k != 'A' else buttonA
-                #print((keyPadState, btn))
-                m = neededMove[(keyPadState, btn)]
-                solution = solveControllers(m, 1, solution)
-                """
-                if m.imag != 0:
-                    solution = solveControllers((m.imag)*1j, 1, solution)
-                if m.real != 0:
-                    solution = solveControllers(m.real, 1, solution)
-                #"""
-                solution = solveControllers(buttonA, 1, solution)
-                keyPadState = btn
-            thisScore = len(solution)*int(code[:-1])
-            cs[i] = min(cs[i], thisScore)
-            #print(len(solution), thisScore, solution)
-            i += 1
-    print(sum(cs))
-    # 125328 high
-    # 106736 low
-    # 117736 not
+    #first
+    second(btns, 2)
+    # second
+    second(btns, 25)
 
 if __name__ == '__main__':
     isTest = False
